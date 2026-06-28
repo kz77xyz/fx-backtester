@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>FX Tester</title>
+<script src="https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --line:#2a3240; --txt:#c9d1d9; --mut:#8b949e; --green:#26a69a; --red:#ef5350; --accent:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:13px/1.4 "Segoe UI",sans-serif; overflow:hidden; }
+  button { background:#21262d; color:var(--txt); border:1px solid var(--line); border-radius:4px; padding:4px 9px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.buy { background:#0d3b34; border-color:var(--green); color:#7ee0d2; font-weight:bold; }
+  button.sell { background:#3b1414; border-color:var(--red); color:#f08aa0; font-weight:bold; }
+  button.big { padding:8px; flex:1; }
+  button.on { background:#1f6feb33; border-color:var(--accent); color:#fff; }
+  input,select { background:#0d1117; color:var(--txt); border:1px solid var(--line); border-radius:4px; padding:3px 6px; width:100%; }
+  #top { display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--panel); border-bottom:1px solid var(--line); }
+  #top b { color:var(--accent); font-size:14px; }
+  #top .mut { color:var(--mut); }
+  #jump { width:180px; }
+  #main { display:flex; height:calc(100vh - 41px); }
+  #left { width:208px; background:var(--panel); border-right:1px solid var(--line); padding:10px; overflow:auto; }
+  #charts { flex:1; min-width:0; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:1px; background:var(--line); }
+  #charts.single { grid-template-columns:1fr; grid-template-rows:1fr; }
+  .cell { position:relative; background:var(--bg); min-width:0; min-height:0; overflow:hidden; }
+  .cell.hidden { display:none; }
+  .cell .tflabel { position:absolute; left:6px; top:4px; z-index:6; font-size:11px; font-weight:bold; color:var(--mut); pointer-events:none; }
+  #right { width:288px; background:var(--panel); border-left:1px solid var(--line); padding:10px; overflow:auto; }
+  h4 { margin:14px 0 6px; font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--line); padding-bottom:3px; }
+  h4:first-child { margin-top:0; }
+  .fld { display:flex; align-items:center; gap:6px; margin:5px 0; }
+  .fld label { flex:0 0 64px; color:var(--mut); font-size:12px; }
+  .row { display:flex; gap:6px; margin:6px 0; }
+  .seg { display:flex; margin:6px 0; }
+  .seg button { flex:1; border-radius:0; border-right:none; }
+  .seg button:first-child { border-radius:4px 0 0 4px; }
+  .seg button:last-child { border-radius:0 4px 4px 0; border-right:1px solid var(--line); }
+  .seg button.on { background:#1f6feb33; border-color:var(--accent); color:#fff; }
+  .stat { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #20262e; font-size:12px; }
+  .stat span:first-child { color:var(--mut); cursor:help; }
+  .pos { color:var(--green); } .neg { color:var(--red); }
+  table { width:100%; border-collapse:collapse; font-size:11px; margin-top:4px; }
+  th,td { padding:2px 4px; text-align:right; border-bottom:1px solid #20262e; }
+  th { color:var(--mut); font-weight:normal; }
+  ul.lst { list-style:none; margin:4px 0; padding:0; max-height:200px; overflow:auto; border:1px solid var(--line); border-radius:4px; }
+  ul.lst li { display:flex; align-items:center; gap:6px; padding:4px 6px; border-bottom:1px solid #20262e; font-size:12px; }
+  ul.lst li:last-child { border-bottom:none; }
+  ul.lst li .sw { width:10px; height:10px; border-radius:2px; flex:0 0 auto; }
+  ul.lst li .nm { flex:1; cursor:pointer; }
+  ul.lst li .x { color:var(--mut); cursor:pointer; }
+  ul.lst li .x:hover { color:var(--red); }
+  .params { display:none; flex-wrap:wrap; gap:4px; padding:4px 6px; background:#0d1117; }
+  .params.open { display:flex; }
+  .params input { width:52px; }
+  .params .pk { color:var(--mut); font-size:11px; align-self:center; }
+  .empty { color:var(--mut); font-size:11px; padding:6px; }
+  .tool { font-size:11px; padding:3px 6px; }
+  .tool.on { background:#1f6feb33; border-color:var(--accent); color:#fff; }
+  .path { font-size:10px; color:var(--mut); word-break:break-all; background:#0d1117; padding:4px 6px; border-radius:4px; border:1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <b id="title">FX Tester</b>
+  <span class="mut" id="clock"></span>
+  <select id="symsel" style="width:90px" title="銘柄"></select>
+  <button id="dlBtn" title="この銘柄の15分足をダウンロードして読込">取得</button>
+  <button class="tool on" id="quadBtn">4画面</button>
+  <button class="tool" id="singleBtn">1画面</button>
+  <select id="tfsel" style="width:70px" title="1画面の足"><option value="900">15m</option><option value="3600">1h</option><option value="14400">4h</option><option value="86400">日</option></select>
+  <span style="flex:1"></span>
+  <span class="mut">日付</span>
+  <input id="datejump" type="datetime-local" style="width:190px">
+  <button id="back" title="1本戻る">◀</button>
+  <button id="play" title="再生/停止 (Space)">▶ 再生</button>
+  <select id="speed" style="width:64px" title="再生速度"><option value="2">0.5s</option><option value="4">0.25s</option><option value="8">8x</option><option value="16">16x</option></select>
+  <button id="step">1 ▶</button>
+  <button id="step10">10 ▶▶</button>
+  <input id="jump" type="range" min="50" value="50">
+</div>
+
+<div id="main">
+  <!-- 左: 口座 + 発注 -->
+  <div id="left">
+    <h4>口座</h4>
+    <div class="fld"><label>残高</label><input id="balance" type="number" value="1000000" step="10000"></div>
+    <div class="fld"><label>レバレッジ</label><input id="lev" type="number" value="25" step="1"></div>
+    <div class="fld"><label>ロット</label><input id="lot" type="number" value="1" step="0.1"></div>
+    <div class="stat"><span title="ロット×10万通貨">取引数量</span><span id="units">-</span></div>
+    <div class="stat"><span title="価格×数量÷レバレッジ">必要証拠金</span><span id="margin">-</span></div>
+    <div class="stat"><span title="残高＋含み損益">有効証拠金</span><span id="equity">-</span></div>
+
+    <h4>発注</h4>
+    <div class="seg" id="otype">
+      <button class="on" data-t="market">成行</button>
+      <button data-t="limit">指値</button>
+      <button data-t="stop">逆指値</button>
+    </div>
+    <div class="fld" id="priceFld" style="display:none"><label>指定価格</label><input id="price" type="number" step="0.01"></div>
+    <div class="fld"><label>SL(pips)</label><input id="sl" type="number" placeholder="無し"></div>
+    <div class="fld"><label>TP(pips)</label><input id="tp" type="number" placeholder="無し"></div>
+    <div class="fld"><label title="SLを決めるとTP=RR×SL幅で自動配置">RR比</label><input id="rr" type="number" value="2" step="0.1"></div>
+    <label style="font-size:11px;color:var(--mut);display:block;margin:4px 0"><input type="checkbox" id="rrauto" style="width:auto" checked> SL指定でTPをRR自動</label>
+    <div class="row">
+      <button class="buy big" id="buy">BUY</button>
+      <button class="sell big" id="sell">SELL</button>
+    </div>
+    <button id="close" style="width:100%">決済 CLOSE</button>
+    <button id="armBtn" style="width:100%;margin-top:6px">🎯 クリックでSL/TP</button>
+    <div id="arminfo" style="font-size:11px;color:var(--accent);min-height:15px;margin-top:3px"></div>
+
+    <h4>予約注文</h4>
+    <ul class="lst" id="pendlist"><li class="empty">なし</li></ul>
+  </div>
+
+  <!-- 中央: 2x2 MTF -->
+  <div id="charts">
+    <div class="cell" id="cMain"><span class="tflabel">15m</span></div>
+    <div class="cell" id="c1h"><span class="tflabel">1h</span></div>
+    <div class="cell" id="c4h"><span class="tflabel">4h</span></div>
+    <div class="cell" id="c1d"><span class="tflabel">日</span></div>
+  </div>
+
+  <!-- 右: ポジション/成績/インジ/描画 -->
+  <div id="right">
+    <h4>ポジション</h4>
+    <div class="stat"><span>建玉</span><span id="posinfo">なし</span></div>
+    <div class="stat"><span title="現在価格と建値の差">含み損益(pips)</span><b id="upnl">-</b></div>
+    <div class="stat"><span>含み損益(¥)</span><b id="upnlm">-</b></div>
+
+    <h4>成績</h4>
+    <div class="stat"><span title="決済済みの累積pips">累積pips</span><b id="cum">0.0</b></div>
+    <div class="stat"><span title="確定損益合計">損益(¥)</span><b id="cumm">0</b></div>
+    <div class="stat"><span>トレード数</span><span id="cnt">0</span></div>
+    <div class="stat"><span title="勝ち÷全トレード。逆張りは高く順張りは低いのが正常">勝率</span><span id="wr">-</span></div>
+    <div class="stat"><span title="総利益÷総損失。1超で勝ち越し、1.3以上が目安">PF</span><span id="pf">-</span></div>
+    <table><thead><tr><th>#</th><th>方向</th><th>pips</th><th>理由</th></tr></thead><tbody id="tlist"></tbody></table>
+
+    <h4>インジケーター（全足に反映）</h4>
+    <div class="row"><select id="addInd" style="flex:1"></select><button id="addBtn">追加</button></div>
+    <ul class="lst" id="indlist"><li class="empty">なし</li></ul>
+
+    <h4>描画ツール（全足に表示）</h4>
+    <div class="row" style="flex-wrap:wrap;gap:4px">
+      <button class="tool" data-tool="h">水平線</button>
+      <button class="tool" data-tool="trend">トレンド</button>
+      <button class="tool" data-tool="fib">フィボ</button>
+      <input type="color" id="drawColor" value="#e3b341" style="width:40px;padding:0" title="描画色">
+    </div>
+    <div id="drawinfo" style="font-size:11px;color:var(--accent);min-height:14px;margin-top:3px"></div>
+    <h4>オブジェクト</h4>
+    <ul class="lst" id="objlist"><li class="empty">なし</li></ul>
+
+    <h4>記録</h4>
+    <div class="path" id="recpath">決済すると sessions/ に自動保存</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let D=null, i=400, pip=0.01, pos=null, pending=[], trades=[], cumPips=0, balance=0, playTimer=null;
+
+const CHART_OPTS={ layout:{ background:{color:"#0e1116"}, textColor:"#c9d1d9", attributionLogo:false },
+  grid:{ vertLines:{color:"#1b2026"}, horzLines:{color:"#1b2026"} },
+  timeScale:{ timeVisible:true, secondsVisible:false, borderColor:"#2a3240" },
+  rightPriceScale:{ borderColor:"#2a3240" }, crosshair:{ mode:0 } };
+const CANDLE_OPTS={ upColor:"#26a69a",downColor:"#ef5350",borderUpColor:"#26a69a",borderDownColor:"#ef5350",
+  wickUpColor:"#26a69a",wickDownColor:"#ef5350" };
+
+// ── TFビュー(各足のチャート) ──
+const TFDEF=[{sec:900,label:"15m",cell:"cMain"},{sec:3600,label:"1h",cell:"c1h"},{sec:14400,label:"4h",cell:"c4h"},{sec:86400,label:"日",cell:"c1d"}];
+const bucketKey=(t,sec)=>Math.floor(t/sec)*sec;
+let views=[], mainV=null, actV=null, layout="quad";
+
+function buildTF(sec){ const b=[]; let c=null;
+  for(let k=0;k<D.time.length;k++){ const key=bucketKey(D.time[k],sec);
+    if(!c||c.time!==key){ if(c)b.push(c); c={time:key,open:D.open[k],high:D.high[k],low:D.low[k],close:D.close[k],startIdx:k}; }
+    else { c.high=Math.max(c.high,D.high[k]); c.low=Math.min(c.low,D.low[k]); c.close=D.close[k]; } }
+  if(c)b.push(c);
+  const idx={}; b.forEach((x,n)=>idx[x.time]=n); return {bars:b, idx};
+}
+function makeView(def,isMain){
+  const el=$(def.cell);
+  const chart=LightweightCharts.createChart(el,CHART_OPTS);
+  const candle=chart.addSeries(LightweightCharts.CandlestickSeries,CANDLE_OPTS,0);
+  const dcv=document.createElement("canvas"); dcv.style.cssText="position:absolute;left:0;top:0;pointer-events:none;z-index:5"; el.appendChild(dcv);
+  const v={def,sec:def.sec,el,chart,candle,dcv,dctx:dcv.getContext("2d"),viewW:isMain?180:150,pre:null,inds:[],paneCount:1,barsTimes:[],isMain};
+  chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r){const w=r.to-r.from; if(w>3) v.viewW=w;} });
+  chart.subscribeCrosshairMove(()=>drawOverlay(v));
+  chart.subscribeClick(p=>onChartClick(v,p));
+  attachDraw(v);
+  return v;
+}
+function renderViewBars(v){ if(!v.pre) return; const ct=D.time[i], key=bucketKey(ct,v.sec), b=v.pre.idx[key]; if(b==null) return;
+  const out=v.pre.bars.slice(0,b).map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close}));
+  const s=v.pre.bars[b].startIdx; let o=D.open[s],h=D.high[s],l=D.low[s],cl=D.close[s];
+  for(let k=s+1;k<=i;k++){ h=Math.max(h,D.high[k]); l=Math.min(l,D.low[k]); cl=D.close[k]; }
+  out.push({time:key,open:o,high:h,low:l,close:cl}); v.candle.setData(out);
+  v.barsTimes=out.map(x=>x.time); v.curB=b;
+  const to=out.length+2; v.chart.timeScale().setVisibleLogicalRange({from:to-v.viewW,to});
+}
+function renderAllBars(){ visibleViews().forEach(renderViewBars); }
+function visibleViews(){ return layout==="quad"?views:[actV]; }
+
+// ── インジ(全足に反映。各足ごとに計算) ──
+const CATALOG = {
+  SMA:{pane:"price", params:[["period",20]]},
+  EMA:{pane:"price", params:[["period",20]]},
+  BB :{pane:"price", params:[["period",20],["std",2.0]]},
+  RSI:{pane:"new",   params:[["period",14]], levels:[30,50,70]},
+  ATR:{pane:"new",   params:[["period",14]]},
+  MACD:{pane:"new",  params:[["fast",12],["slow",26],["signal",9]], levels:[0]},
+  ADX:{pane:"new",   params:[["period",14]], levels:[20,25]},
+};
+const PALETTE=["#f0b90b","#42a5f5","#ab47bc","#26c6da","#ec407a","#66bb6a","#ffa726"];
+const COLMAP={MACD:"#42a5f5",MACD_signal:"#ef5350",MACD_hist:"#888",ADX:"#26a69a",DI_plus:"#42a5f5",DI_minus:"#ef5350",
+  BB_upper:"#8899aa",BB_mid:"#556677",BB_lower:"#8899aa",RSI:"#f0b90b",ATR:"#ffa726"};
+let indSpecs=[], specId=0;
+function buildAddSelect(){ const s=$("addInd"); s.innerHTML=""; Object.keys(CATALOG).forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=k;s.appendChild(o);}); }
+async function fetchIndTF(type,params,sec){ const r=await fetch("/api/indicator",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,params,tf:sec})}); return r.json(); }
+async function addSpecToView(v,spec){ const def=CATALOG[spec.type];
+  const res=await fetchIndTF(spec.type,spec.params,v.sec);
+  const pane= def.pane==="price"?0:(v.paneCount++);
+  const inst={specId:spec.id,type:spec.type,pane,series:{},keys:Object.keys(res.series),map:{...res.series},time:res.time};
+  inst.keys.forEach(col=>{ const color=COLMAP[col]||spec.color;
+    inst.series[col]= col==="MACD_hist"? v.chart.addSeries(LightweightCharts.HistogramSeries,{color,priceLineVisible:false},pane)
+      : v.chart.addSeries(LightweightCharts.LineSeries,{color,lineWidth:1,priceLineVisible:false,lastValueVisible:false},pane); });
+  const first=Object.values(inst.series)[0]; (def.levels||[]).forEach(lv=> first.createPriceLine({price:lv,color:"#4b5563",lineStyle:2,lineWidth:1,axisLabelVisible:true,title:String(lv)}));
+  v.inds.push(inst); sliceInst(v,inst);
+}
+async function addIndicator(type){ const def=CATALOG[type]; const params={}; def.params.forEach(([k,dv])=>params[k]=dv);
+  const spec={id:++specId,type,params,color:PALETTE[specId%PALETTE.length]}; indSpecs.push(spec);
+  for(const v of views) await addSpecToView(v,spec);
+  renderIndList(); resize();
+}
+function sliceInst(v,inst){ const lim=bucketKey(D.time[i],v.sec);
+  inst.keys.forEach(col=>{ const arr=inst.map[col],ts=inst.time,out=[];
+    for(let k=0;k<ts.length;k++){ if(ts[k]>lim) break; if(arr[k]!=null) out.push({time:ts[k],value:arr[k]}); }
+    inst.series[col].setData(out); }); }
+function sliceAllInd(){ visibleViews().forEach(v=>v.inds.forEach(inst=>sliceInst(v,inst))); }
+async function recalcSpec(spec){ for(const v of views){ const inst=v.inds.find(x=>x.specId===spec.id); if(!inst) continue;
+  const res=await fetchIndTF(spec.type,spec.params,v.sec); const vals=Object.values(res.series); inst.time=res.time;
+  inst.keys.forEach((k,idx)=> inst.map[k]=vals[idx]); sliceInst(v,inst); } }
+function removeSpec(specIdv){ const si=indSpecs.findIndex(s=>s.id===specIdv); if(si<0) return;
+  views.forEach(v=>{ const idx=v.inds.findIndex(x=>x.specId===specIdv); if(idx<0) return; const inst=v.inds[idx];
+    Object.values(inst.series).forEach(s=>v.chart.removeSeries(s));
+    if(inst.pane>0){ const gone=inst.pane; try{v.chart.removePane(gone);}catch(e){} v.inds.forEach(x=>{if(x.pane>gone)x.pane--;}); v.paneCount--; }
+    v.inds.splice(idx,1); });
+  indSpecs.splice(si,1); renderIndList(); resize();
+}
+function colorSpec(spec,color){ spec.color=color; views.forEach(v=>{ const inst=v.inds.find(x=>x.specId===spec.id); if(!inst) return;
+  Object.keys(inst.series).forEach(col=>{ if(!COLMAP[col]) inst.series[col].applyOptions({color}); }); }); }
+function renderIndList(){
+  const ul=$("indlist"); ul.innerHTML="";
+  if(!indSpecs.length){ ul.innerHTML='<li class="empty">なし</li>'; return; }
+  indSpecs.forEach(spec=>{
+    const li=document.createElement("li");
+    const pstr=spec.type+"("+Object.values(spec.params).join(",")+")";
+    li.innerHTML=`<span class="sw" style="background:${spec.color}"></span><span class="nm">${pstr}</span><span class="x">✕</span>`;
+    const pdiv=document.createElement("div"); pdiv.className="params";
+    const cwrap=document.createElement("span"); cwrap.className="pk"; cwrap.textContent="色:";
+    const cinp=document.createElement("input"); cinp.type="color"; cinp.value=spec.color; cinp.style.width="32px"; cinp.style.padding="0";
+    cinp.oninput=()=>{ colorSpec(spec,cinp.value); li.querySelector(".sw").style.background=cinp.value; };
+    pdiv.appendChild(cwrap); pdiv.appendChild(cinp);
+    CATALOG[spec.type].params.forEach(([k,dv])=>{
+      const wrap=document.createElement("span"); wrap.className="pk"; wrap.textContent=k+":";
+      const inp=document.createElement("input"); inp.type="number"; inp.value=spec.params[k]; inp.step=(k==="std")?"0.1":"1";
+      inp.onchange=()=>{ spec.params[k]=parseFloat(inp.value); recalcSpec(spec).then(renderIndList); };
+      pdiv.appendChild(wrap); pdiv.appendChild(inp);
+    });
+    li.querySelector(".nm").onclick=()=>pdiv.classList.toggle("open");
+    li.querySelector(".x").onclick=()=>removeSpec(spec.id);
+    ul.appendChild(li); ul.appendChild(pdiv);
+  });
+}
+$("addBtn").onclick=()=>addIndicator($("addInd").value);
+function snapEntry(){ const r=mainV.inds.find(x=>x.type==="RSI"), a=mainV.inds.find(x=>x.type==="ATR");
+  if(r&&r.map.RSI) pos.rsi=r.map.RSI[i]; if(a&&a.map.ATR) pos.atr=a.map.ATR[i]; }
+
+// ── 描画ツール(時間/価格で保持・全足に表示) ──
+let drawings=[], drawTool=null, tmpPts=[], hoverPt=null, tmpV=null, selDraw=null, drag=null;
+const FIB=[0,0.236,0.382,0.5,0.618,0.786,1];
+function vxOf(v,t){ const key=bucketKey(t,v.sec); const n=v.pre?v.pre.idx[key]:null; if(n==null||v.curB==null||n>v.curB) return null;
+  const frac=(t-key)/v.sec; return v.chart.timeScale().logicalToCoordinate(n+frac); }
+const vyOf=(v,p)=>v.candle.priceToCoordinate(p);
+function ptFromXY(v,x,y){ const lg=v.chart.timeScale().coordinateToLogical(x); let bi=Math.floor(lg); const frac=lg-bi;
+  bi=Math.max(0,Math.min(v.barsTimes.length-1,bi)); const t=v.barsTimes[bi]+frac*v.sec; return {t, p:v.candle.coordinateToPrice(y)}; }
+function evtXY(v,e){ const r=v.dcv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
+function distSeg(px,py,x1,y1,x2,y2){ const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy; if(!l2) return Math.hypot(px-x1,py-y1);
+  let t=((px-x1)*dx+(py-y1)*dy)/l2; t=Math.max(0,Math.min(1,t)); return Math.hypot(px-(x1+dx*t),py-(y1+dy*t)); }
+function pickAt(v,mx,my){
+  for(let di=drawings.length-1;di>=0;di--){ const d=drawings[di];
+    if(d.type==="h"){ const y=vyOf(v,d.pts[0].p); if(y!=null&&Math.abs(my-y)<7) return {di}; continue; }
+    for(let pi=0;pi<d.pts.length;pi++){ const x=vxOf(v,d.pts[pi].t),y=vyOf(v,d.pts[pi].p); if(x!=null&&y!=null&&Math.hypot(mx-x,my-y)<9) return {di,pi}; }
+    const a=d.pts[0],b=d.pts[1]; if(!b) continue; const x1=vxOf(v,a.t),y1=vyOf(v,a.p),x2=vxOf(v,b.t),y2=vyOf(v,b.p); if([x1,y1,x2,y2].some(q=>q==null)) continue;
+    if(d.type==="trend"){ if(distSeg(mx,my,x1,y1,x2,y2)<7) return {di}; }
+    else if(d.type==="fib"){ const xl=Math.min(x1,x2),xr=Math.max(x1,x2); for(const f of FIB){ const y=vyOf(v,a.p+(b.p-a.p)*f); if(y!=null&&mx>=xl&&mx<=xr&&Math.abs(my-y)<6) return {di}; } }
+  }
+  return null;
+}
+function handlePos(v,d){ const W=v.dcv.width;
+  if(d.type==="h"){ const y=vyOf(v,d.pts[0].p); return [[W*0.2,y,"h"],[W*0.5,y,"h"],[W*0.8,y,"h"]]; }
+  const a=d.pts[0],b=d.pts[1]; if(!b) return [];
+  const x1=vxOf(v,a.t),y1=vyOf(v,a.p),x2=vxOf(v,b.t),y2=vyOf(v,b.p);
+  return [[x1,y1,"l"],[x2,y2,"r"],[(x1+x2)/2,(y1+y2)/2,"c"]];
+}
+function drawShape(v,d,ghost){ const ctx=v.dctx, W=v.dcv.width;
+  ctx.strokeStyle=d.color; ctx.fillStyle=d.color; ctx.lineWidth=ghost?1:1.5; ctx.setLineDash(ghost?[4,4]:[]);
+  if(d.type==="h"){ const y=vyOf(v,d.pts[0].p); if(y==null) return; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    const lbl=d.pts[0].p.toFixed(3); ctx.fillText(lbl,4,y-3); ctx.fillText(lbl,W-ctx.measureText(lbl).width-6,y-3); }
+  else if(d.type==="trend"){ const a=d.pts[0],b=d.pts[1]; if(!b) return; const x1=vxOf(v,a.t),y1=vyOf(v,a.p),x2=vxOf(v,b.t),y2=vyOf(v,b.p); if([x1,y1,x2,y2].some(q=>q==null)) return;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+  else if(d.type==="fib"){ const a=d.pts[0],b=d.pts[1]; if(!b) return; const x1=vxOf(v,a.t),x2=vxOf(v,b.t); if(x1==null||x2==null) return; const xl=Math.min(x1,x2),xr=Math.max(x1,x2);
+    FIB.forEach(f=>{ const price=a.p+(b.p-a.p)*f, y=vyOf(v,price); if(y==null) return; ctx.globalAlpha=.9; ctx.beginPath(); ctx.moveTo(xl,y); ctx.lineTo(xr,y); ctx.stroke(); ctx.fillText(f.toFixed(3)+" "+price.toFixed(3),xr+4,y-2); }); ctx.globalAlpha=1; }
+  ctx.setLineDash([]);
+}
+function drawOverlay(v){ const ctx=v.dctx; if(!ctx) return; ctx.clearRect(0,0,v.dcv.width,v.dcv.height); ctx.font="11px Segoe UI";
+  drawings.forEach(d=>drawShape(v,d,false));
+  if(drawTool && tmpV===v && tmpPts.length){ drawShape(v,{type:drawTool,color:$("drawColor").value,pts:[...tmpPts,hoverPt].filter(Boolean)},true); }
+  if(selDraw!=null && drawings[selDraw]){ handlePos(v,drawings[selDraw]).forEach(([x,y])=>{ if(x==null||y==null) return;
+    ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fillStyle="#fff"; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle=drawings[selDraw].color; ctx.stroke(); }); }
+}
+function redrawAll(){ visibleViews().forEach(drawOverlay); }
+function updateCapture(){ const cap=(drawTool||selDraw!=null); views.forEach(v=>{ v.dcv.style.pointerEvents=cap?"auto":"none"; v.dcv.style.cursor=drawTool?"crosshair":(selDraw!=null?"pointer":"default"); }); }
+function setTool(t){ drawTool=(drawTool===t?null:t); tmpPts=[]; hoverPt=null; tmpV=null;
+  document.querySelectorAll('.tool[data-tool]').forEach(b=>b.classList.toggle("on",b.dataset.tool===drawTool));
+  const msg={h:"クリックで水平線",trend:"始点→終点をクリック",fib:"始点→終点をクリック"};
+  $("drawinfo").textContent=drawTool?msg[drawTool]:""; if(drawTool) selDraw=null;
+  updateCapture(); redrawAll();
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b=> b.onclick=()=>setTool(b.dataset.tool));
+function attachDraw(v){
+  v.dcv.addEventListener("mousemove",e=>{ // 作図プレビュー
+    if(drawTool){ const [x,y]=evtXY(v,e); tmpV=tmpV||v; if(tmpV===v){ hoverPt=ptFromXY(v,x,y); drawOverlay(v); } return; }
+    if(drag){ const [x,y]=evtXY(v,e); const cur=ptFromXY(v,x,y); const d=drawings[selDraw];
+      if(drag.role==="c"){ const dt=cur.t-drag.start.t, dp=cur.p-drag.start.p; d.pts.forEach((pt,idx)=>{ pt.t=drag.orig[idx].t+dt; pt.p=drag.orig[idx].p+dp; }); }
+      else if(drag.role==="l"){ d.pts[0]={t:cur.t,p:cur.p}; } else if(drag.role==="r"){ d.pts[1]={t:cur.t,p:cur.p}; } else if(drag.role==="h"){ d.pts[0].p=cur.p; }
+      redrawAll(); }
+  });
+  v.dcv.addEventListener("click",e=>{ if(!drawTool) return; const [x,y]=evtXY(v,e); if(!tmpPts.length) tmpV=v; if(tmpV!==v) return;
+    tmpPts.push(ptFromXY(v,x,y)); const need=drawTool==="h"?1:2;
+    if(tmpPts.length>=need){ drawings.push({type:drawTool,color:$("drawColor").value,pts:tmpPts}); tmpPts=[]; hoverPt=null; renderObjList(); setTool(null); }
+    redrawAll();
+  });
+  v.dcv.addEventListener("mousedown",e=>{ if(drawTool||selDraw==null) return; const [mx,my]=evtXY(v,e);
+    let role=null; handlePos(v,drawings[selDraw]).forEach(([x,y,r])=>{ if(x!=null&&y!=null&&Math.hypot(mx-x,my-y)<9) role=r; });
+    if(!role){ selDraw=null; updateCapture(); redrawAll(); $("drawinfo").textContent=""; return; }
+    const d=drawings[selDraw]; drag={role, orig:d.pts.map(pt=>({t:pt.t,p:pt.p})), start:ptFromXY(v,mx,my)}; e.preventDefault();
+  });
+}
+window.addEventListener("mouseup",()=>{ if(drag){ drag=null; renderObjList(); } });
+function renderObjList(){ const ul=$("objlist"); if(!drawings.length){ ul.innerHTML='<li class="empty">なし</li>'; return; }
+  ul.innerHTML=""; const NAME={h:"水平線",trend:"トレンド",fib:"フィボ"};
+  drawings.forEach((d,n)=>{ const li=document.createElement("li");
+    const lbl=NAME[d.type]+(d.type==="h"?" "+d.pts[0].p.toFixed(3):"");
+    li.innerHTML=`<span class="sw" style="background:${d.color}"></span><span class="nm">${lbl}</span><span class="x">✕</span>`;
+    li.querySelector(".x").onclick=()=>{ drawings.splice(n,1); renderObjList(); redrawAll(); }; ul.appendChild(li); });
+}
+
+// ── チャートクリック(選択 / SL-TP arm / 予約配置)。actVのみ ──
+function onChartClick(v,p){ if(!p.point) return;
+  if(v!==actV){ return; }
+  if(!drawTool && armMode){ armClick(p); return; }
+  if(!drawTool && selDraw==null && !armMode){ const hit=pickAt(v,p.point.x,p.point.y); if(hit){ selDraw=hit.di; updateCapture(); redrawAll(); $("drawinfo").textContent="ハンドルをドラッグで移動 / 線の外をクリックで解除"; } }
+}
+
+// ── 表示更新 ──
+const fmt=(x,d=1)=>(x>=0?"+":"")+x.toFixed(d);
+const setCls=(el,v)=>el.className=v>=0?"pos":"neg";
+const money=v=>Math.round(v).toLocaleString();
+const lotUnits=()=>(parseFloat($("lot").value)||0)*100000;
+const pipMoney=lot=>pip*lot*100000;
+function isoLocal(ts){ return new Date(ts*1000).toISOString().slice(0,16); }
+function render(){
+  $("clock").textContent=isoLocal(D.time[i]).replace("T"," ");
+  $("jump").value=i;
+  renderAllBars(); sliceAllInd();
+  updateAccount(); updatePos(); renderPending(); redrawAll();
+}
+function updateAccount(){ const c=D?D.close[i]:0, u=lotUnits(), lev=parseFloat($("lev").value)||1;
+  $("units").textContent=u.toLocaleString(); $("margin").textContent="¥"+money(c*u/lev);
+  let unreal=pos?(c-pos.entry)*(pos.side==="BUY"?1:-1)/pip*pipMoney(pos.lot):0; $("equity").textContent="¥"+money(balance+unreal); }
+function updatePos(){ if(pos){ const c=D.close[i], pips=(c-pos.entry)*(pos.side==="BUY"?1:-1)/pip, m=pips*pipMoney(pos.lot);
+    $("posinfo").textContent=`${pos.side} ${pos.lot}lot @${pos.entry.toFixed(3)}`;
+    $("upnl").textContent=fmt(pips); setCls($("upnl"),pips); $("upnlm").textContent="¥"+money(m); setCls($("upnlm"),m); checkExit();
+  } else { $("posinfo").textContent="なし"; $("upnl").textContent="-"; $("upnl").className=""; $("upnlm").textContent="-"; $("upnlm").className=""; } }
+
+// ── 注文(建玉/SL/TPはactVに描く) ──
+let otype="market";
+[...$("otype").children].forEach(b=> b.onclick=()=>{ otype=b.dataset.t; [...$("otype").children].forEach(x=>x.classList.toggle("on",x===b)); $("priceFld").style.display=otype==="market"?"none":"flex"; });
+function sltp(side,entry){ const s=parseFloat($("sl").value),t=parseFloat($("tp").value),g=side==="BUY"?1:-1; return {slP:isNaN(s)?null:entry-g*s*pip, tpP:isNaN(t)?null:entry+g*t*pip}; }
+function order(side){ const lot=parseFloat($("lot").value)||1;
+  if(otype==="market"){ if(pos){ alert("既に建玉あり。先に決済して。"); return; } openPos(side,D.close[i],lot); }
+  else { const p=parseFloat($("price").value); if(isNaN(p)){ startPlace(side); return; }
+    const {slP,tpP}=sltp(side,p); pending.push({type:otype,side,price:p,lot,slP,tpP}); selPending=pending.length-1; renderPending(); } }
+let placeSide=null, placeType=null;
+function startPlace(side){ placeSide=side; placeType=otype; armMode="place"; $("arminfo").textContent="クリックで"+side+"の"+(otype==="limit"?"指値":"逆指値")+"価格を指定（Escで中止）"; }
+function openPos(side,entry,lot){ const {slP,tpP}=sltp(side,entry); pos={side,entry,lot,entryIdx:i,slP,tpP,rsi:null,atr:null}; snapEntry(); drawLines(); updatePos(); }
+function fillPending(){ for(let n=pending.length-1;n>=0;n--){ const o=pending[n];
+  if(D.low[i]<=o.price && o.price<=D.high[i] && !pos){ pos={side:o.side,entry:o.price,lot:o.lot,entryIdx:i,slP:o.slP,tpP:o.tpP,rsi:null,atr:null};
+    snapEntry(); pending.splice(n,1); if(selPending===n) selPending=null; drawLines(); } } }
+let selPending=null;
+function renderPending(){ const ul=$("pendlist"); if(!pending.length){ ul.innerHTML='<li class="empty">なし</li>'; selPending=null; drawPendLines(); return; }
+  ul.innerHTML="";
+  pending.forEach((o,n)=>{ const li=document.createElement("li"); if(n===selPending) li.style.background="#1f6feb22";
+    const sl=o.slP!=null?` SL${o.slP.toFixed(3)}`:"", tp=o.tpP!=null?` TP${o.tpP.toFixed(3)}`:"";
+    li.innerHTML=`<span class="nm">${o.type==="limit"?"指":"逆"} ${o.side} ${o.lot} @${o.price}${sl}${tp}</span><span class="x">✕</span>`;
+    li.querySelector(".nm").onclick=()=>{ selPending=(selPending===n?null:n); renderPending(); };
+    li.querySelector(".x").onclick=()=>{ pending.splice(n,1); if(selPending===n)selPending=null; renderPending(); }; ul.appendChild(li); });
+  drawPendLines(); }
+let priceLines=[];
+function clearLines(){ priceLines.forEach(l=>{try{actV.candle.removePriceLine(l)}catch(e){}}); priceLines=[]; }
+function drawLines(){ clearLines(); if(!pos) return;
+  priceLines.push(actV.candle.createPriceLine({price:pos.entry,color:"#58a6ff",lineWidth:1,title:pos.side}));
+  if(pos.slP!=null) priceLines.push(actV.candle.createPriceLine({price:pos.slP,color:"#ef5350",lineStyle:2,title:"SL"}));
+  if(pos.tpP!=null) priceLines.push(actV.candle.createPriceLine({price:pos.tpP,color:"#26a69a",lineStyle:2,title:"TP"})); }
+let pendLines=[];
+function drawPendLines(){ pendLines.forEach(l=>{try{actV.candle.removePriceLine(l)}catch(e){}}); pendLines=[];
+  if(selPending==null || !pending[selPending]) return; const o=pending[selPending];
+  pendLines.push(actV.candle.createPriceLine({price:o.price,color:"#d29922",lineStyle:1,title:(o.type==="limit"?"指":"逆")+o.side}));
+  if(o.slP!=null) pendLines.push(actV.candle.createPriceLine({price:o.slP,color:"#ef5350",lineStyle:2,title:"SL"}));
+  if(o.tpP!=null) pendLines.push(actV.candle.createPriceLine({price:o.tpP,color:"#26a69a",lineStyle:2,title:"TP"})); }
+
+// ── クリックでSL/TP(プレビュー＋RR自動) ──
+let armMode=null, armPrev=null;
+function armTarget(){ if(pos) return {set:(k,v)=>pos[k]=v, entry:pos.entry, side:pos.side, redraw:()=>{drawLines();updatePos();}};
+  if(selPending!=null && pending[selPending]){ const o=pending[selPending]; return {set:(k,v)=>o[k]=v, entry:o.price, side:o.side, redraw:()=>renderPending()}; } return null; }
+function startArm(){ const t=armTarget(); if(!t){ $("arminfo").textContent="先に建玉か予約注文を選択して"; return; } armMode="sl"; $("arminfo").textContent="クリックでSL価格を指定（Escで中止）"; }
+function clearArm(){ armMode=null; $("arminfo").textContent=""; if(armPrev){ try{actV.candle.removePriceLine(armPrev)}catch(e){} armPrev=null; } }
+$("armBtn").onclick=()=>armMode?clearArm():startArm();
+function armClick(p){ const price=actV.candle.coordinateToPrice(p.point.y); if(price==null) return;
+  if(armMode==="place"){ const {slP,tpP}=sltp(placeSide,price);
+    pending.push({type:placeType,side:placeSide,price:+price.toFixed(5),lot:parseFloat($("lot").value)||1,slP,tpP});
+    selPending=pending.length-1; renderPending(); clearArm(); $("arminfo").textContent="予約注文を配置（リストで選択しSL/TP設定可）"; return; }
+  const t=armTarget(); if(!t){ clearArm(); return; } const g=t.side==="BUY"?1:-1;
+  if(armMode==="sl"){ t.set("slP",price);
+    if($("rrauto").checked){ const rr=parseFloat($("rr").value)||0, risk=(t.entry-price)*g; t.set("tpP", risk>0 ? t.entry+g*rr*risk : null); clearArm(); t.redraw(); $("arminfo").textContent="SL/TP設定完了"; }
+    else { armMode="tp"; $("arminfo").textContent="クリックでTP価格を指定"; t.redraw(); } }
+  else { t.set("tpP",price); clearArm(); t.redraw(); $("arminfo").textContent="SL/TP設定完了"; } }
+// armプレビュー(actVのcrosshair)
+function armPreview(){ views.forEach(v=> v.chart.subscribeCrosshairMove(p=>{ if(v!==actV||!armMode||!p.point) return;
+  const price=actV.candle.coordinateToPrice(p.point.y); if(price==null) return;
+  if(!armPrev) armPrev=actV.candle.createPriceLine({price,color:"#e3b341",lineStyle:3,title:armMode.toUpperCase()+"?"}); else armPrev.applyOptions({price}); })); }
+
+function checkExit(){ if(!pos) return; const hi=D.high[i],lo=D.low[i];
+  if(pos.side==="BUY"){ if(pos.slP!=null&&lo<=pos.slP) return doClose(pos.slP,"SL"); if(pos.tpP!=null&&hi>=pos.tpP) return doClose(pos.tpP,"TP"); }
+  else { if(pos.slP!=null&&hi>=pos.slP) return doClose(pos.slP,"SL"); if(pos.tpP!=null&&lo<=pos.tpP) return doClose(pos.tpP,"TP"); } }
+function doClose(price,reason){ if(!pos) return;
+  const pips=(price-pos.entry)*(pos.side==="BUY"?1:-1)/pip, m=pips*pipMoney(pos.lot);
+  const trade={ entry_time:isoLocal(D.time[pos.entryIdx]).replace("T"," "), exit_time:isoLocal(D.time[i]).replace("T"," "),
+    side:pos.side, lot:pos.lot, entry:+pos.entry.toFixed(5), exit:+price.toFixed(5), pips:+pips.toFixed(1), pnl:+m.toFixed(0), bars_held:i-pos.entryIdx,
+    sl:pos.slP!=null?+pos.slP.toFixed(5):"", tp:pos.tpP!=null?+pos.tpP.toFixed(5):"",
+    rsi_at_entry:pos.rsi!=null?+pos.rsi.toFixed(1):"", atr_at_entry:pos.atr!=null?+pos.atr.toFixed(4):"", exit_reason:reason, csv:D.csv };
+  trades.push(trade); cumPips+=trade.pips; balance+=m; pos=null; clearLines(); updateStats(); updateAccount(); updatePos();
+  fetch("/api/trade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(trade)}).then(r=>r.json()).then(d=>{ if(d.file) $("recpath").textContent="保存先: "+d.file; }).catch(()=>{}); }
+function updateStats(){ $("cum").textContent=fmt(cumPips); setCls($("cum"),cumPips);
+  const tot=trades.reduce((s,t)=>s+t.pnl,0); $("cumm").textContent="¥"+money(tot); setCls($("cumm"),tot); $("cnt").textContent=trades.length;
+  const wins=trades.filter(t=>t.pips>0), gp=wins.reduce((s,t)=>s+t.pips,0), gl=trades.filter(t=>t.pips<0).reduce((s,t)=>s-t.pips,0);
+  $("wr").textContent=trades.length?(100*wins.length/trades.length).toFixed(0)+"%":"-"; $("pf").textContent=gl?(gp/gl).toFixed(2):"-";
+  const tb=$("tlist"); tb.innerHTML=""; trades.slice(-40).reverse().forEach((t,n)=>{ const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${trades.length-n}</td><td>${t.side}</td><td class="${t.pips>=0?'pos':'neg'}">${fmt(t.pips)}</td><td>${t.exit_reason}</td>`; tb.appendChild(tr); }); }
+
+// ── レイアウト(1画面/4画面) ──
+function applyLayout(){ const ch=$("charts");
+  if(layout==="quad"){ ch.classList.remove("single"); views.forEach(v=>v.el.classList.remove("hidden")); actV=mainV; mainV.viewW=180; }
+  else { ch.classList.add("single"); const sel=+$("tfsel").value; actV=views.find(v=>v.sec===sel)||mainV;
+    views.forEach(v=>v.el.classList.toggle("hidden",v!==actV)); actV.viewW=300; }
+  $("quadBtn").classList.toggle("on",layout==="quad"); $("singleBtn").classList.toggle("on",layout==="single");
+  $("tfsel").disabled=(layout==="quad");
+  drawLines(); drawPendLines(); resize(); render();
+}
+// ── 銘柄ダウンロード ──
+async function loadSymbols(){ try{ const d=await (await fetch("/api/symbols")).json();
+  const s=$("symsel"); s.innerHTML=""; d.symbols.forEach(x=>{const o=document.createElement("option");o.value=x;o.textContent=x;s.appendChild(o);});
+  if(d.current){ const cur=d.current.replace(/_15m\.csv$/i,"").toUpperCase(); if(d.symbols.includes(cur)) s.value=cur; } }catch(e){} }
+$("dlBtn").onclick=async()=>{ const sym=$("symsel").value; if(!confirm(sym+" の15分足(直近2年)を取得して読み込む？\n少し時間がかかります")) return;
+  $("dlBtn").disabled=true; $("dlBtn").textContent="取得中...";
+  try{ const r=await fetch("/api/download",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol:sym,years:2})});
+    const d=await r.json(); if(d.ok){ location.reload(); } else { alert("失敗: "+(d.error||"")); $("dlBtn").disabled=false; $("dlBtn").textContent="取得"; } }
+  catch(e){ alert("通信エラー: "+e); $("dlBtn").disabled=false; $("dlBtn").textContent="取得"; } };
+
+$("quadBtn").onclick=()=>{ layout="quad"; applyLayout(); };
+$("singleBtn").onclick=()=>{ layout="single"; applyLayout(); };
+$("tfsel").onchange=()=>{ if(layout==="single") applyLayout(); };
+
+// ── バー送り & 再生 & 日付 ──
+function setIndex(ni){ ni=Math.min(D.time.length-1,Math.max(50,ni)); i=ni; fillPending(); render(); }
+function step(n){ const ni=Math.min(D.time.length-1,Math.max(50,i+n)); if(ni===i){ if(n>0) stopPlay(); return; } setIndex(ni); }
+function play(){ if(playTimer) return; const sp=parseFloat($("speed").value); playTimer=setInterval(()=>step(1),1000/sp); $("play").textContent="⏸ 停止"; }
+function stopPlay(){ clearInterval(playTimer); playTimer=null; $("play").textContent="▶ 再生"; }
+function syncDateInput(){ $("datejump").min=isoLocal(D.time[0]); $("datejump").max=isoLocal(D.time[D.time.length-1]); $("datejump").value=isoLocal(D.time[i]); }
+$("datejump").onchange=()=>{ if(!$("datejump").value) return; const target=new Date($("datejump").value+"Z").getTime()/1000; let lo=0,hi=D.time.length-1;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(D.time[mid]<target) lo=mid+1; else hi=mid; } setIndex(lo); };
+$("play").onclick=()=>playTimer?stopPlay():play();
+$("speed").onchange=()=>{ if(playTimer){ stopPlay(); play(); } };
+$("step").onclick=()=>step(1); $("step10").onclick=()=>step(10); $("back").onclick=()=>step(-1);
+$("jump").oninput=e=>setIndex(+e.target.value);
+$("buy").onclick=()=>order("BUY"); $("sell").onclick=()=>order("SELL"); $("close").onclick=()=>doClose(D.close[i],"manual");
+["balance","lev","lot"].forEach(id=>$(id).onchange=()=>{ balance=parseFloat($("balance").value)||0; updateAccount(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ tmpPts=[]; selDraw=null; setTool(null); clearArm(); updateCapture(); }
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
+  if(e.key==="ArrowRight"){ step(e.shiftKey?10:1); e.preventDefault(); }
+  if(e.key==="ArrowLeft"){ step(-1); e.preventDefault(); }
+  if(e.key===" "){ playTimer?stopPlay():play(); e.preventDefault(); }
+  if(e.key==="b") order("BUY"); if(e.key==="s") order("SELL"); if(e.key==="c") doClose(D.close[i],"manual"); });
+
+function resize(){ visibleViews().forEach(v=>{ const el=v.el; v.chart.resize(el.clientWidth, el.clientHeight);
+    const panes=v.chart.panes(); for(let p=1;p<panes.length;p++){ try{ panes[p].setHeight(layout==="single"?120:80); }catch(e){} }
+    v.dcv.width=el.clientWidth; v.dcv.height=el.clientHeight; drawOverlay(v); }); }
+window.addEventListener("resize",resize);
+
+// ── 起動 ──
+async function load(){
+  D = await (await fetch("/api/bars")).json();
+  pip = D.pip_size; $("title").textContent="FX Tester — "+D.csv;
+  // 上位足の環境認識ができるよう、十分な履歴がある位置から開始
+  i = Math.min(D.time.length-50, 10000); if(i<400) i=Math.max(50, D.time.length-50);
+  $("jump").max=D.time.length-1; $("jump").value=i; balance=parseFloat($("balance").value)||0;
+  views=TFDEF.map((d,n)=>makeView(d,n===0)); mainV=views[0]; actV=mainV;
+  views.forEach(v=> v.pre=buildTF(v.sec));
+  buildAddSelect(); armPreview(); loadSymbols();
+  renderAllBars();
+  await addIndicator("SMA"); await addIndicator("SMA");
+  indSpecs[1].params.period=50; await recalcSpec(indSpecs[1]); renderIndList();
+  render(); syncDateInput(); resize();
+}
+load();
+</script>
+</body>
+</html>

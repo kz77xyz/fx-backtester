@@ -1,0 +1,9 @@
+# データ（大きい・再配布規約あり。各自fetchする）
+*.csv
+# トレード記録
+sessions/
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
